@@ -40,12 +40,12 @@ let accounts = [
   }
 ]
 
+const customAgent = new http.Agent({ keepAlive: true, maxSockets: 1500 })
+
 co(function * () {
   process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = 0
   console.log('PID ', process.pid)
   console.log(http.globalAgent.maxSockets)
-  http.globalAgent.maxSockets = 1500
-  // http.globalAgent.keepAlive = true
 
   sleep(5)
 
@@ -95,7 +95,7 @@ function sendPayment (from, to) {
   const id = uuid()
 
   request.put(`http://localhost:3333/v1/payments/` + id, {
-    agent: http.globalAgent,
+    agent: customAgent,
     json: {
       receiver: `http://${SPSP_SERVER_HOST}:3332/v1/spsp/` + to,
       id: id,
