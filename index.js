@@ -3,6 +3,7 @@
 const http = require('http')
 const request = require('request')
 const uuid = require('uuid')
+const co = require('co')
 // const ServiceManager = require('five-bells-service-manager')
 
 const REQUESTS_PER_SECOND = 50
@@ -39,7 +40,7 @@ let accounts = [
   }
 ]
 
-function main () {
+co(function * () {
   process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = 0
   console.log('PID ', process.pid)
   console.log(http.globalAgent.maxSockets)
@@ -86,7 +87,7 @@ function main () {
       getBalance(a.to)
     }
   }, 10 * 1000 + DURATION)
-}
+})
 
 function sendPayment (from, to) {
   // console.log('sending payment')
@@ -113,12 +114,12 @@ function sendPayment (from, to) {
     })
 }
 
-async function query (user) {
-  await request.get(`http://localhost:3333/v1/query?receiver=http://${SPSP_SERVER_HOST}:3332/v1/spsp/` + user)
+function * query (user) {
+  yield request.get(`http://localhost:3333/v1/query?receiver=http://${SPSP_SERVER_HOST}:3332/v1/spsp/` + user)
 }
 
-async function sleep (time) {
-  await new Promise((resolve) => setTimeout(resolve, time))
+function * sleep (time) {
+  yield new Promise((resolve) => setTimeout(resolve, time))
 }
 
 function getBalance (user) {
@@ -134,5 +135,3 @@ function getBalance (user) {
     console.log(response.body)
   })
 }
-
-main()
