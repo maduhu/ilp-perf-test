@@ -4,20 +4,18 @@ const http = require('http')
 const request = require('request')
 const uuid = require('uuid')
 const co = require('co')
-// const ServiceManager = require('five-bells-service-manager')
+const chalk = require('chalk')
 
-const REQUESTS_PER_SECOND = 50
-const DURATION = 5 * 60 * 1000 // minutes
+const REQUESTS_PER_SECOND = 52
+const DURATION = 70 * 60 * 1000 // minutes
 let requests = 0
 let responses = 0
 let errors = 0
 
 const LEDGER_HOST = '172.88.0.1'
 const SPSP_SERVER_HOST = '172.88.0.1'
-// const SPSP_SERVER_HOST = '192.168.56.101'
-// const LEDGER_HOST = '192.168.56.1'
 
-let accounts = [
+let ACCOUNTS = [
   {
     from: 'alice1',
     to: 'bob1'
@@ -44,53 +42,61 @@ const customAgent = new http.Agent({ keepAlive: true, maxSockets: 1500 })
 
 co(function * () {
   process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = 0
-  console.log('PID ', process.pid)
-  console.log(http.globalAgent.maxSockets)
 
-  sleep(5)
-
-  // const manager = new ServiceManager('./node_modules', 'data')
-
-  for (const a of accounts) {
-    // manager.updateAccount('ledger.stress.test', a.from, { balance: 1000 })
-    // manager.updateAccount('ledger.stress.test', a.to, { balance: 1000 })
-
+  // query SPSP server so that it creates receivers
+  for (const a of ACCOUNTS) {
     query(a.to)
   }
 
-  // get a quote
+  // warm up phase
+  chalk.green('starting warm up')
+  yield sendPeriodically(10, 60000)
+  chalk.green('ending warm up')
+
+  resetMetrics()
 
   // perodically send payments
-  console.log('start sending at')
-  const intervals = []
-  for (const a of accounts) {
-    const interval = setInterval(function () {
-      sendPayment(a.from, a.to)
-    }, 1000 / REQUESTS_PER_SECOND * Object.keys(accounts).length)
-    intervals.push(interval)
-    sleep(41)
-  }
+  chalk.green('starting performance test')
+  const result = yield sendPeriodically(REQUESTS_PER_SECOND, DURATION)
+  chalk.green('ending performance test')
 
-  setTimeout(function () {
-    console.log('stop sending')
-    for (const i of intervals) {
-      clearInterval(i)
-    }
-  }, DURATION)
-
+  // print results
   setTimeout(function () {
     console.log('Requests sent: ', requests)
     console.log('Responses sent: ', responses)
     console.log('Errors: ', errors)
-
-    for (const a of accounts) {
-      getBalance(a.to)
-    }
-  }, 10 * 1000 + DURATION)
+    console.log(JSON.stringify(result))
+  }, 10 * 1000)
 })
 
+function * sendPeriodically (reqs_per_second, duration) {
+  const intervals = []
+  for (const a of ACCOUNTS) {
+    const interval = setInterval(function () {
+      sendPayment(a.from, a.to)
+    }, 1000 / reqs_per_second * Object.keys(ACCOUNTS).length)
+    intervals.push(interval)
+    yield sleep(41) // wait a little so that not all intervals start at the same time to avoid sending in bursts
+  }
+
+  // print the number of payments per second
+  let lastResponseCount = 0
+  const measureInterval = 5 // every x seconds
+  let completedPaymentsPerInterval = []
+  intervals.push(setInterval(function () {
+    const completedPayments = (responses - lastResponseCount) / measureInterval
+    console.log('Payments/second: ', completedPayments)
+    lastResponseCount = responses
+    completedPaymentsPerInterval.push(completedPayments)
+  }, measureInterval * 1000))
+
+  yield sleep(duration)
+  intervals.forEach((i) => clearInterval(i))
+
+  return { measureInterval, completedPaymentsPerInterval}
+}
+
 function sendPayment (from, to) {
-  // console.log('sending payment')
   requests += 1
   const id = uuid()
 
@@ -104,7 +110,6 @@ function sendPayment (from, to) {
       sourceAccount: `http://${LEDGER_HOST}:3000/accounts/` + from,
       sourceIdentifier: 'payment request ' + requests
     }}, function (error, response, body) {
-      // console.log('response')
       if (error) {
         console.log('error', error)
         errors += 1
@@ -134,4 +139,10 @@ function getBalance (user) {
     }
     console.log(response.body)
   })
+}
+
+function resetMetrics () {
+  requests = 0
+  errors = 0
+  responses = 0
 }
