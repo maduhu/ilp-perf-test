@@ -49,16 +49,16 @@ co(function * () {
   }
 
   // warm up phase
-  chalk.green('starting warm up')
+  console.log(chalk.green('starting warm up'))
   yield sendPeriodically(10, 60000)
-  chalk.green('ending warm up')
+  console.log(chalk.green('ending warm up'))
 
   resetMetrics()
 
   // perodically send payments
-  chalk.green('starting performance test')
+  console.log(chalk.green('starting performance test'))
   const result = yield sendPeriodically(REQUESTS_PER_SECOND, DURATION)
-  chalk.green('ending performance test')
+  console.log(chalk.green('ending performance test'))
 
   // print results
   setTimeout(function () {
@@ -69,12 +69,12 @@ co(function * () {
   }, 10 * 1000)
 })
 
-function * sendPeriodically (reqs_per_second, duration) {
+function * sendPeriodically (reqsPerSecond, duration) {
   const intervals = []
   for (const a of ACCOUNTS) {
     const interval = setInterval(function () {
       sendPayment(a.from, a.to)
-    }, 1000 / reqs_per_second * Object.keys(ACCOUNTS).length)
+    }, 1000 / reqsPerSecond * Object.keys(ACCOUNTS).length)
     intervals.push(interval)
     yield sleep(41) // wait a little so that not all intervals start at the same time to avoid sending in bursts
   }
@@ -93,7 +93,7 @@ function * sendPeriodically (reqs_per_second, duration) {
   yield sleep(duration)
   intervals.forEach((i) => clearInterval(i))
 
-  return { measureInterval, completedPaymentsPerInterval}
+  return {measureInterval, completedPaymentsPerInterval}
 }
 
 function sendPayment (from, to) {
